@@ -1,59 +1,159 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+Dokumentasi Integrasi API Sistem Rekomendasi Video Edukasi E-Learning ITG
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Dokumen ini berisi spesifikasi teknis dan panduan integrasi sistem rekomendasi materi perkuliahan berbasis Content-Based Filtering (TF-IDF & Cosine Similarity) dengan platform LMS E-Learning ITG.
 
-## About Laravel
+1. Ikhtisar Arsitektur
+Sistem rekomendasi dirancang sebagai Microservice/API Terpisah menggunakan arsitektur Decoupled. Komunikasi antar-server (Server-to-Server / S2S) dibagi menjadi 2 fase utama:
+1.	Fase Asynchronous Trigger (POST /api/process): Dipanggil oleh LMS saat dosen menambah atau memperbarui materi. Server API Rekomendasi akan mengeksekusi preprocessing, pemanggilan YouTube API, kalkulasi TF-IDF & Cosine Similarity, lalu menyimpan hasil Top 5 video ke database lokal.
+2.	Fase Read-Only Retrieval (GET /api/rekomendasi): Dipanggil oleh LMS saat mahasiswa/dosen membuka halaman materi. Server API Rekomendasi mengembalikan data video yang sudah matang di database.
+   
+2. Autentikasi
+Setiap request yang dikirim dari server LMS E-Learning ITG ke API Rekomendasi wajib menyertakan token autentikasi rahasia (Pre-Shared Secret) melalui Header Authorization.
+●	Header Name: Authorization
+●	Format Value: Bearer <ITG_API_TOKEN>
+Catatan: Request tanpa token atau dengan token yang tidak cocok akan ditolak otomatis oleh middleware server dengan kode HTTP 401 Unauthorized.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+3. Spesifikasi Endpoint
+#Endpoint 1: Processing & Calculation (Trigger)
+Digunakan untuk memicu kalkulasi rekomendasi video saat ada perubahan atau penambahan materi baru di LMS.
+●	Method: POST
+●	URL Path: /api/process
+●	Content-Type: application/json
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+#Request Headers
+Header	        |Value	                |Required
+Authorization	|Bearer <ITG_API_TOKEN>	|Ya
+Accept	        |application/json	    |Ya
+Content-Type	|application/json	    |Ya
 
-## Learning Laravel
+#Request Body (JSON)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+JSON
+{
+  "kode_prodi": "IF",
+  "kode_mata_kuliah": "IFPPL8391",
+  "pertemuan": 4,
+  "kelas": "B",
+  "judul_materi": "Pemrograman Berorientasi Objek dan Konsep Encapsulation",
+  "deskripsi_materi": "Membahas tentang pilar PBO khususnya enkapsulasi, access modifier public, private, protected, serta penerapan setter dan getter dalam PHP."
+}
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
 
-## Laravel Sponsors
+#Parameter Field Definition
+Field	            |Type	    |Description
+kode_prodi	        |String	    |Kode program studi
+kode_mata_kuliah	|String	    |Kode unik mata kuliah
+pertemuan	        |Integer	|Nomor pertemuan ke- (misal: 1, 2, 4)
+kelas	            |String	    |Identifier kelas (misal: A, B, R)
+judul_materi	    |String	    |Judul modul/materi perkuliahan
+deskripsi_materi	|String	    |deskripsi konten materi perkuliahan
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+#Response Success (200 OK)
+JSON
+{
+  "status": "success",
+  "message": "Kalkulasi rekomendasi video berhasil diproses dan disimpan.",
+  "data": {
+    "kode_mata_kuliah": "IFPPL8391",
+    "pertemuan": 4,
+    "kelas": "B",
+    "recommended_videos_count": 5,
+    "videos": [
+      {
+        "youtube_id": "abc123XYZ",
+        "similarity_score": 0.4215
+      },
+      {
+        "youtube_id": "def456UVW",
+        "similarity_score": 0.3102
+      },
+      {
+        "youtube_id": "ghi789RST",
+        "similarity_score": 0.2854
+      },
+      {
+        "youtube_id": "jkl012OPQ",
+        "similarity_score": 0.1982
+      },
+      {
+        "youtube_id": "mno345LMN",
+        "similarity_score": 0.0812
+      }
+    ]
+  }
+}
 
-### Premium Partners
+#Endpoint 2: Fetch Recommendation (Fetch Video)
+Bisa Digunakan oleh LMS untuk mengambil ID video rekomendasi yang sudah tersimpan di database untuk ditampilkan pada antarmuka pengguna.
+●	Method: GET
+●	URL Path: /api/rekomendasi
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+#Request Headers
+Header	        |Value	                |Required
+Authorization	|Bearer <ITG_API_TOKEN>	|Ya
+Accept	        |application/json	    |Ya
 
-## Contributing
+#Query Parameters
+Parameter	        |Type	    |Required	|Description
+kode_mata_kuliah	|String	    |Ya	        |Kode mata kuliah yang dicari
+pertemuan	        |Integer	|Ya	        |Pertemuan ke-
+kelas	            |String	    |Ya	        |Kelas perkuliahan
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+#Contoh URL Request:
+GET /api/rekomendasi?kode_mata_kuliah=IFPPL8391&pertemuan=4&kelas=B
 
-## Code of Conduct
+#Response Success (200 OK)
+JSON
+{
+  "status": "success",
+  "data": {
+    "kode_mata_kuliah": "IFPPL8391",
+    "pertemuan": 4,
+    "kelas": "B",
+    "skor_kemiripan": [0.4215, 0.3102, 0.2854, 0.1982, 0.0812],
+    "video_ids": [
+      "abc123XYZ",
+      "def456UVW",
+      "ghi789RST",
+      "jkl012OPQ",
+      "mno345LMN"
+    ]
+  }
+}
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Response Not Found (404 Not Found)
+Terjadi jika materi belum pernah diisi atau belum melalui proses pemicuan (POST /api/process).
 
-## Security Vulnerabilities
+JSON
+{
+  "status": "error",
+  "message": "Rekomendasi video belum dikalkulasi untuk materi ini."
+}
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+#Diagram Alur Integrasi (Sequence Flow)
 
-## License
+[ Dosen ]               [ LMS E-Learning ITG ]               [ API Recommendation ]
+    │                             │                                    │
+    │ 1. Upload/Update Materi     │                                    │
+    ├────────────────────────────>│                                    │
+    │                             │ 2. POST /api/process (JSON)        │
+    │                             ├───────────────────────────────────>│
+    │                             │    (With Bearer Token)             │ 3. Exec: Preprocessing,
+    │                             │                                    │    YouTube Fetch, TF-IDF,
+    │                             │                                    │    Cosine Similarity
+    │                             │ 4. Response 200 OK + Saved in DB   │ 4. Save to DB
+    │                             │<───────────────────────────────────┤ (`updateOrCreate`)
+    │                             │                                    │
+[ Mahasiswa ]                     │                                    │
+    │                             │                                    │
+    │ 5. Buka Halaman Materi      │                                    │
+    ├────────────────────────────>│                                    │
+    │                             │ 6. GET /api/rekomendasi            │
+    │                             ├───────────────────────────────────>│
+    │                             │ 7. Response 200 OK (Fetch Video)   │ Direct Read from DB
+    │                             │<───────────────────────────────────┤ (Fast Response < 100ms)
+    │ 8. Tampilkan Video Youtube  │                                    │
+    │<────────────────────────────┤                                    │
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
