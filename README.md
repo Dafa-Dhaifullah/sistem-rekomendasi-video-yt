@@ -1,35 +1,50 @@
-Dokumentasi Integrasi API Sistem Rekomendasi Video Edukasi E-Learning ITG
+# Dokumentasi Integrasi API Sistem Rekomendasi Video Edukasi E-Learning ITG
 
-Dokumen ini berisi spesifikasi teknis dan panduan integrasi sistem rekomendasi materi perkuliahan berbasis Content-Based Filtering (TF-IDF & Cosine Similarity) dengan platform LMS E-Learning ITG.
+Dokumen ini berisi spesifikasi teknis dan panduan integrasi sistem rekomendasi materi perkuliahan berbasis *Content-Based Filtering* (TF-IDF & Cosine Similarity) dengan platform LMS E-Learning ITG.
 
-1. Ikhtisar Arsitektur
-Sistem rekomendasi dirancang sebagai Microservice/API Terpisah menggunakan arsitektur Decoupled. Komunikasi antar-server (Server-to-Server / S2S) dibagi menjadi 2 fase utama:
-1.	Fase Asynchronous Trigger (POST /api/process): Dipanggil oleh LMS saat dosen menambah atau memperbarui materi. Server API Rekomendasi akan mengeksekusi preprocessing, pemanggilan YouTube API, kalkulasi TF-IDF & Cosine Similarity, lalu menyimpan hasil Top 5 video ke database lokal.
-2.	Fase Read-Only Retrieval (GET /api/rekomendasi): Dipanggil oleh LMS saat mahasiswa/dosen membuka halaman materi. Server API Rekomendasi mengembalikan data video yang sudah matang di database.
-   
-2. Autentikasi
-Setiap request yang dikirim dari server LMS E-Learning ITG ke API Rekomendasi wajib menyertakan token autentikasi rahasia (Pre-Shared Secret) melalui Header Authorization.
-●	Header Name: Authorization
-●	Format Value: Bearer <ITG_API_TOKEN>
-Catatan: Request tanpa token atau dengan token yang tidak cocok akan ditolak otomatis oleh middleware server dengan kode HTTP 401 Unauthorized.
+---
 
-3. Spesifikasi Endpoint
-#Endpoint 1: Processing & Calculation (Trigger)
+## 1. Ikhtisar Arsitektur
+
+Sistem rekomendasi dirancang sebagai Microservice/API Terpisah menggunakan arsitektur *Decoupled*. Komunikasi antar-server (*Server-to-Server / S2S*) dibagi menjadi 2 fase utama:
+
+1. **Fase Asynchronous Trigger (`POST /api/process`)**: Dipanggil oleh LMS saat dosen menambah atau memperbarui materi. Server API Rekomendasi akan mengeksekusi *preprocessing*, pemanggilan YouTube API, kalkulasi TF-IDF & Cosine Similarity, lalu menyimpan hasil Top 5 video ke database lokal.
+2. **Fase Read-Only Retrieval (`GET /api/rekomendasi`)**: Dipanggil oleh LMS saat mahasiswa/dosen membuka halaman materi. Server API Rekomendasi mengembalikan data video yang sudah matang di database.
+
+---
+
+## 2. Autentikasi
+
+Setiap request yang dikirim dari server LMS E-Learning ITG ke API Rekomendasi wajib menyertakan token autentikasi rahasia (*Pre-Shared Secret*) melalui Header `Authorization`.
+
+* **Header Name**: `Authorization`
+* **Format Value**: `Bearer <ITG_API_TOKEN>`
+
+> **Catatan:** Request tanpa token atau dengan token yang tidak cocok akan ditolak otomatis oleh *middleware* server dengan kode HTTP `401 Unauthorized`.
+
+---
+
+## 3. Spesifikasi Endpoint
+
+### Endpoint 1: Processing & Calculation (Trigger)
+
 Digunakan untuk memicu kalkulasi rekomendasi video saat ada perubahan atau penambahan materi baru di LMS.
-●	Method: POST
-●	URL Path: /api/process
-●	Content-Type: application/json
 
+* **Method**: `POST`
+* **URL Path**: `/api/process`
+* **Content-Type**: `application/json`
 
-#Request Headers
-Header	        |Value	                |Required
-Authorization	|Bearer <ITG_API_TOKEN>	|Ya
-Accept	        |application/json	    |Ya
-Content-Type	|application/json	    |Ya
+#### Request Headers
 
-#Request Body (JSON)
+| Header | Value | Required |
+| :--- | :--- | :--- |
+| `Authorization` | `Bearer <ITG_API_TOKEN>` | Ya |
+| `Accept` | `application/json` | Ya |
+| `Content-Type`| `application/json` | Ya |
 
-JSON
+#### Request Body (JSON)
+
+```json
 {
   "kode_prodi": "IF",
   "kode_mata_kuliah": "IFPPL8391",
@@ -38,19 +53,22 @@ JSON
   "judul_materi": "Pemrograman Berorientasi Objek dan Konsep Encapsulation",
   "deskripsi_materi": "Membahas tentang pilar PBO khususnya enkapsulasi, access modifier public, private, protected, serta penerapan setter dan getter dalam PHP."
 }
+```
 
+#### Parameter Field Definition
 
-#Parameter Field Definition
-Field	            |Type	    |Description
-kode_prodi	        |String	    |Kode program studi
-kode_mata_kuliah	|String	    |Kode unik mata kuliah
-pertemuan	        |Integer	|Nomor pertemuan ke- (misal: 1, 2, 4)
-kelas	            |String	    |Identifier kelas (misal: A, B, R)
-judul_materi	    |String	    |Judul modul/materi perkuliahan
-deskripsi_materi	|String	    |deskripsi konten materi perkuliahan
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `kode_prodi` | String | Kode program studi |
+| `kode_mata_kuliah` | String | Kode unik mata kuliah |
+| `pertemuan` | Integer | Nomor pertemuan ke- (misal: 1, 2, 4) |
+| `kelas` | String | Identifier kelas (misal: A, B, R) |
+| `judul_materi` | String | Judul modul/materi perkuliahan |
+| `deskripsi_materi` | String | Deskripsi konten materi perkuliahan |
 
-#Response Success (200 OK)
-JSON
+#### Response Success (`200 OK`)
+
+```json
 {
   "status": "success",
   "message": "Kalkulasi rekomendasi video berhasil diproses dan disimpan.",
@@ -83,28 +101,40 @@ JSON
     ]
   }
 }
+```
 
-#Endpoint 2: Fetch Recommendation (Fetch Video)
-Bisa Digunakan oleh LMS untuk mengambil ID video rekomendasi yang sudah tersimpan di database untuk ditampilkan pada antarmuka pengguna.
-●	Method: GET
-●	URL Path: /api/rekomendasi
+---
 
-#Request Headers
-Header	        |Value	                |Required
-Authorization	|Bearer <ITG_API_TOKEN>	|Ya
-Accept	        |application/json	    |Ya
+### Endpoint 2: Fetch Recommendation (Fetch Video)
 
-#Query Parameters
-Parameter	        |Type	    |Required	|Description
-kode_mata_kuliah	|String	    |Ya	        |Kode mata kuliah yang dicari
-pertemuan	        |Integer	|Ya	        |Pertemuan ke-
-kelas	            |String	    |Ya	        |Kelas perkuliahan
+Bisa digunakan oleh LMS untuk mengambil ID video rekomendasi yang sudah tersimpan di database untuk ditampilkan pada antarmuka pengguna.
 
-#Contoh URL Request:
+* **Method**: `GET`
+* **URL Path**: `/api/rekomendasi`
+
+#### Request Headers
+
+| Header | Value | Required |
+| :--- | :--- | :--- |
+| `Authorization` | `Bearer <ITG_API_TOKEN>` | Ya |
+| `Accept` | `application/json` | Ya |
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `kode_mata_kuliah` | String | Ya | Kode mata kuliah yang dicari |
+| `pertemuan` | Integer| Ya | Pertemuan ke- |
+| `kelas` | String | Ya | Kelas perkuliahan |
+
+**Contoh URL Request:**
+```http
 GET /api/rekomendasi?kode_mata_kuliah=IFPPL8391&pertemuan=4&kelas=B
+```
 
-#Response Success (200 OK)
-JSON
+#### Response Success (`200 OK`)
+
+```json
 {
   "status": "success",
   "data": {
@@ -121,18 +151,23 @@ JSON
     ]
   }
 }
+```
 
-Response Not Found (404 Not Found)
-Terjadi jika materi belum pernah diisi atau belum melalui proses pemicuan (POST /api/process).
+#### Response Not Found (`404 Not Found`)
+Terjadi jika materi belum pernah diisi atau belum melalui proses pemicuan (`POST /api/process`).
 
-JSON
+```json
 {
   "status": "error",
   "message": "Rekomendasi video belum dikalkulasi untuk materi ini."
 }
+```
 
-#Diagram Alur Integrasi (Sequence Flow)
+---
 
+## 4. Diagram Alur Integrasi (Sequence Flow)
+
+```text
 [ Dosen ]               [ LMS E-Learning ITG ]               [ API Recommendation ]
     │                             │                                    │
     │ 1. Upload/Update Materi     │                                    │
@@ -155,5 +190,4 @@ JSON
     │                             │<───────────────────────────────────┤ (Fast Response < 100ms)
     │ 8. Tampilkan Video Youtube  │                                    │
     │<────────────────────────────┤                                    │
-
-
+```
